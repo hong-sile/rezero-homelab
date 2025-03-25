@@ -118,7 +118,65 @@ Proxmox에서 여러 VM을 운영하기 위해서는 네트워크 모드를 적�
 
 1. Bridge 모드
 ![proxmox 노드 사진](image-2.png)
+
+    Proxmox에서는 VM의 네트워크 인터페이스(NIC)를 vmbr0와 같은 **가상 브리지**에 연결할 수 있습니다.<br>
+이 방식은 VM이 마치 물리 네트워크에 직접 연결된 것처럼 동작하게 만듭니다.<br>
+즉, Proxmox 호스트가 일종의 스위치 역할을 하며,
+외부 네트워크와 VM 사이를 직접 연결해주는 구조라고 볼 수 있습니다.
+
+    쉽게 표현하면, 네트워크 구조는 다음과 같은 형태로 동작합니다.<br>
+`외부 네트워크 <-> Proxmox 호스트 <-> 내부 VM`
+
+    실제로 proxmox host에서 다음과 같이 패킷 캡쳐를 하고 내부 vm에서 ping을 쏘면 proxmox 호스트에서 해당 패킷이 보입니다.
+
+    proxmox host 패킷 캡쳐
+    ```
+    root@hong:~# tcpdump -i tap100i0 icmp and src 172.30.1.60
+    tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+    listening on tap100i0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+    14:11:13.109304 IP 172.30.1.60 > 223.130.192.248: ICMP echo request, id 4874, seq 18, length 64
+    14:11:14.133353 IP 172.30.1.60 > 223.130.192.248: ICMP echo request, id 4874, seq 19, length 64
+    14:11:15.157343 IP 172.30.1.60 > 223.130.192.248: ICMP echo request, id 4874, seq 20, length 64
+    14:11:16.181270 IP 172.30.1.60 > 223.130.192.248: ICMP echo request, id 4874, seq 21, length 64
+    ```
+    내부 proxmox vm(172.30.1.60)에서 외부로 ping을 쏘는 요청을 dump 떴을 때 위와 같이 캡쳐가 되는 것을 볼 수 있습니다.
+
 2. NAT 모드
+
+    VM이 외부 네트워크와 직접 연결되지 않고, Proxmox 호스트를 통해 간접적으로 통신하는 방식입니다.
+
+    이때 Proxmox는 일종의 라우터 역할을 하며,
+    내부 VM에는 프라이빗 IP를 할당하고,
+    외부와의 통신이 필요할 때는 호스트가 대신 통신을 수행합니다.
+
+    즉 네트워크 구조는 다음과 같다.<br>
+`외부 네트워크 <-> Proxmox 호스트 <-> (NAT) <-> 내부 VM`
+
+    proxmox host의 패킷 캡쳐
+    ```
+    tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+    listening on tap100i0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+    14:52:21.120012 IP 172.30.1.14 > 8.8.8.8: ICMP echo request, id 2345, seq 1, length 64
+    14:52:21.145789 IP 8.8.8.8 > 172.30.1.14: ICMP echo reply, id 2345, seq 1, length 64
+    14:52:22.122001 IP 172.30.1.14 > 8.8.8.8: ICMP echo request, id 2345, seq 2, length 64
+    14:52:22.147340 IP 8.8.8.8 > 172.30.1.14: ICMP echo reply, id 2345, seq 2, length 64
+    ```
+
+    내부 vm에서 ping 요청을 보냈음에도, 실제로는 proxmox host(172.30.1.14)가 출발지로 찍힙니다.
+
 3. Host-Only 모드
 
-## 원격 접속
+    Host-Only 모드는 내부 VM과 Proxmox 호스트 간의 통신만 허용되고,
+외부 네트워크와는 완전히 단절된 구성입니다.<br>
+즉, VM은 인터넷에도 연결되지 않고, 외부 장비와도 직접 통신할 수 없습니다.
+
+    `Proxmox 호스트 <-> 내부 VM  (외부 네트워크와는 단절)`
+
+    이때 VM에는 호스트에서만 접근 가능한 전용 프라이빗 IP가 할당됩니다.<br>
+    VM은 Proxmox 호스트와는 자유롭게 통신할 수 있지만, 외부 인터넷이나 다른 장비들과는 통신할 수 없습니다.
+
+    만약 외부로 요청을 보내면 차단된다.
+    ```
+    ping 8.8.8.8
+    connect: Network is unreachable
+    ```
