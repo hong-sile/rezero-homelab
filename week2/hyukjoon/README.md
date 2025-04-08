@@ -61,3 +61,4 @@ proxmox에 tailscale로 vpn 구축을 하고 난 뒤에 이상한 일이 생겼�
 상단에 global dns 주소 추가해주고 나서 이 문제는 해결되었습니다.
 proxmox resolv.conf에서도 global dns주소를 추가해주는 것으로 이 문제는 일단락되었습니다.
 
+vm은 그런거 없이 iso에 설정된 기본 dns를 잘 가져옵니다.
